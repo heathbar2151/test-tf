@@ -64,6 +64,8 @@ jobs:
         # Run the JavaScript code with Node.js
         node --experimental-modules find-repos.mjs
 
+        echo "repos=$(cat repos.json)" >> $GITHUB_ENV
+
     # Step 5: Update JSON files in Repos B and C
     - name: Update JSON files in Repos B and C
       uses: peter-evans/repository-dispatch@v2
