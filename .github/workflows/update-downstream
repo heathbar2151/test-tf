@@ -2,8 +2,8 @@ name: Update Version Reference in Matching Repos
 
 on:
   push:
-    paths:
-      - "VERSION"
+    tags:
+      - 'v*'  # Triggers the workflow on any tag starting with "v"
 
 jobs:
   update_repos:
@@ -13,10 +13,10 @@ jobs:
       - name: Checkout repo A
         uses: actions/checkout@v2
 
-      - name: Get current version from VERSION file
+      - name: Extract version from tag
         id: get_version
         run: |
-          version=$(cat VERSION)
+          version="${GITHUB_REF#refs/tags/}"
           echo "version=$version" >> $GITHUB_ENV
 
       - name: Find Repos with Naming Convention
@@ -26,7 +26,7 @@ jobs:
           REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         with:
           script: |
-            const namingPattern = /^test\d+$/;  // Matches "test" followed by a number
+            const namingPattern = /^test\d+$/;
             const octokit = new (require("@octokit/action").Octokit)();
             
             async function findRepos() {
@@ -43,7 +43,6 @@ jobs:
             return matchingRepos;
 
       - name: Update JSON files in Matching Repos
-        if: steps.find_repos.outputs.success == 'true'
         uses: actions/github-script@v6
         env:
           REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
@@ -52,7 +51,7 @@ jobs:
             const version = process.env.version;
             const { Octokit } = require("@octokit/action");
             const octokit = new Octokit();
-            const repos = ${{ steps.find_repos.outputs.result }};  // Dynamic repos from previous step
+            const repos = ${{ steps.find_repos.outputs.result }};
 
             async function updateFile(owner, repo, path) {
               const { data: file } = await octokit.rest.repos.getContent({
@@ -74,7 +73,7 @@ jobs:
                 message: `Update version to ${version}`,
                 content: updatedContent,
                 sha: file.sha,
-                branch: 'main' // or specify a target branch
+                branch: 'main'
               });
             }
 
