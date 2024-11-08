@@ -22,6 +22,8 @@ jobs:
       - name: Find Repos with Naming Convention
         id: find_repos
         uses: actions/github-script@v6
+        env:
+          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         with:
           script: |
             const namingPattern = /^test\d+$/;
@@ -41,6 +43,7 @@ jobs:
       - name: Update JSON files in Matching Repos
         uses: actions/github-script@v6
         env:
+          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           VERSION: ${{ env.version }}
         with:
           script: |
