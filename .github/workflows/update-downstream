@@ -1,0 +1,86 @@
+name: Update Version Reference in Matching Repos
+
+on:
+  push:
+    paths:
+      - "VERSION"
+
+jobs:
+  update_repos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo A
+        uses: actions/checkout@v2
+
+      - name: Get current version from VERSION file
+        id: get_version
+        run: |
+          version=$(cat VERSION)
+          echo "version=$version" >> $GITHUB_ENV
+
+      - name: Find Repos with Naming Convention
+        id: find_repos
+        uses: actions/github-script@v6
+        env:
+          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+        with:
+          script: |
+            const namingPattern = /^test\d+$/;  // Matches "test" followed by a number
+            const octokit = new (require("@octokit/action").Octokit)();
+            
+            async function findRepos() {
+              const repos = [];
+              for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
+                repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
+              }
+              return repos.map(repo => ({ owner: repo.owner.login, name: repo.name, path: 'sbx/alerts.json' }));
+            }
+
+            const matchingRepos = await findRepos();
+            console.log("Matching repositories:", matchingRepos);
+
+            return matchingRepos;
+
+      - name: Update JSON files in Matching Repos
+        if: steps.find_repos.outputs.success == 'true'
+        uses: actions/github-script@v6
+        env:
+          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+        with:
+          script: |
+            const version = process.env.version;
+            const { Octokit } = require("@octokit/action");
+            const octokit = new Octokit();
+            const repos = ${{ steps.find_repos.outputs.result }};  // Dynamic repos from previous step
+
+            async function updateFile(owner, repo, path) {
+              const { data: file } = await octokit.rest.repos.getContent({
+                owner,
+                repo,
+                path
+              });
+
+              const content = Buffer.from(file.content, 'base64').toString();
+              const jsonContent = JSON.parse(content);
+              jsonContent.version = version;
+              
+              const updatedContent = Buffer.from(JSON.stringify(jsonContent, null, 2)).toString('base64');
+
+              await octokit.rest.repos.createOrUpdateFileContents({
+                owner,
+                repo,
+                path,
+                message: `Update version to ${version}`,
+                content: updatedContent,
+                sha: file.sha,
+                branch: 'main' // or specify a target branch
+              });
+            }
+
+            Promise.all(repos.map(repo => updateFile(repo.owner, repo.name, repo.path)))
+              .then(() => console.log("Version updated in matching repos"))
+              .catch(error => {
+                console.error(error);
+                process.exit(1);
+              });
