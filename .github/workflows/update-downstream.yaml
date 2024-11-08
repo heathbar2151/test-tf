@@ -1,104 +1,70 @@
-name: Update Version Reference in Matching Repos
+name: Update Version References in Repos B and C
 
 on:
   push:
     tags:
-      - 'v*'  # Triggers the workflow on any tag starting with "v"
+      - 'v*'  # Trigger workflow on any tag push (e.g., v1.2.3 -> v1.2.4)
 
 jobs:
-  update_repos:
+  update_version_references:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo A
-        uses: actions/checkout@v2
+    # Step 1: Checkout the repository where the version is updated
+    - name: Checkout Repo A
+      uses: actions/checkout@v3
 
-      - name: Extract version from tag
-        id: get_version
-        run: |
-          version="${GITHUB_REF#refs/tags/}"
-          echo "version=$version" >> $GITHUB_ENV
+    # Step 2: Get the tag (version) of the latest push
+    - name: Get version tag
+      id: get_version
+      run: |
+        VERSION_TAG=$(echo "${GITHUB_REF#refs/tags/}")
+        echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
 
-      - name: Set up Node.js (for @octokit/rest)
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
+    # Step 3: Find repos that follow the naming convention "test{number}"
+    - name: Find Repos with Naming Convention
+      id: find_repos
+      env:
+        REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+      run: |
+        # Create a temporary .mjs file to hold the JavaScript code (using ESM syntax)
+        echo "
+        import { Octokit } from '@octokit/rest'; // Use 'import' for ESM
+        import fetch from 'node-fetch'; // Import the 'fetch' polyfill for Node.js
 
-      - name: Install @octokit/rest
-        run: |
-          npm install @octokit/rest
+        const octokit = new Octokit({ 
+          auth: process.env.REPO_TOKEN, 
+          request: { fetch }  // Pass 'fetch' to Octokit
+        });
+        const namingPattern = /^test\\d+$/;
+        const repos = [];
 
-      - name: Find Repos with Naming Convention
-        id: find_repos
-        env:
-         REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-        run: |
-          # Create a temporary .mjs file to hold the JavaScript code (using ESM syntax)
-          echo "
-          import { Octokit } from '@octokit/rest'; // Use 'import' for ESM
-          import fetch from 'node-fetch'; // Import the 'fetch' polyfill for Node.js
+        (async () => {
+          for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: 'all' })) {
+            repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
+          }
 
-          const octokit = new Octokit({ 
-            auth: process.env.REPO_TOKEN, 
-            request: { fetch }  // Pass 'fetch' to Octokit
-          });
-          const namingPattern = /^test\\d+$/;
-          const repos = [];
+          console.log('Matching repositories:', repos);
+          console.log('repos:', JSON.stringify(repos.map(repo => ({
+            owner: repo.owner.login,
+            name: repo.name,
+            path: 'path/to/version.json'
+          }))));
+          process.exit(0);
+        })();
+        " > find-repos.mjs
 
-          (async () => {
-            for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: 'all' })) {
-              repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
-            }
+        # Install the 'node-fetch' package to polyfill fetch
+        npm install node-fetch
 
-            console.log('Matching repositories:', repos);
-            console.log('repos:', JSON.stringify(repos.map(repo => ({
-              owner: repo.owner.login,
-              name: repo.name,
-              path: 'path/to/version.json'
-            }))));
-            process.exit(0);
-          })();
-          " > find-repos.mjs
+        # Run the JavaScript code with Node.js
+        node --experimental-modules find-repos.mjs
 
-          # Install the 'node-fetch' package to polyfill fetch
-          npm install node-fetch
-
-          # Run the JavaScript code with Node.js
-          node --experimental-modules find-repos.mjs
-
-      - name: Update JSON files in Matching Repos
-        uses: actions/github-script@v6
-        env:
-          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
-          VERSION: ${{ env.version }}
-        with:
-          script: |
-            const version = process.env.VERSION;
-            const repos = JSON.parse(${ { steps.find_repos.outputs.result } });
-
-            async function updateFile(owner, repo, path) {
-              const { data: file } = await github.rest.repos.getContent({
-                owner,
-                repo,
-                path
-              });
-
-              const content = Buffer.from(file.content, 'base64').toString();
-              const jsonContent = JSON.parse(content);
-              jsonContent.version = version;
-              
-              const updatedContent = Buffer.from(JSON.stringify(jsonContent, null, 2)).toString('base64');
-
-              await github.rest.repos.createOrUpdateFileContents({
-                owner,
-                repo,
-                path,
-                message: `Update version to ${version}`,
-                content: updatedContent,
-                sha: file.sha,
-                branch: 'main'
-              });
-            }
-
-            await Promise.all(repos.map(repo => updateFile(repo.owner, repo.name, repo.path)));
-            console.log("Version updated in matching repos");
+    # Step 4: Update JSON files in Repos B and C
+    - name: Update JSON files in Repos B and C
+      uses: peter-evans/repository-dispatch@v2
+      with:
+        token: ${{ secrets.REPO_ACCESS_TOKEN }}
+        repository: ${{ steps.find_repos.outputs.repos }}  # The repos from the previous step
+        event-type: update-version
+        client-payload: '{"version": "${{ env.VERSION_TAG }}"}'
