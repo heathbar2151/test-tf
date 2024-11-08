@@ -33,30 +33,31 @@ jobs:
         env:
           REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         run: |
-          # Create a temporary file to hold the JavaScript code
+          # Create a temporary .mjs file to hold the JavaScript code (using ESM syntax)
           echo "
-          const { Octokit } = require('@octokit/rest');
+          import { Octokit } from '@octokit/rest'; // Use 'import' for ESM
           const octokit = new Octokit({ auth: process.env.REPO_TOKEN });
           const namingPattern = /^test\\d+$/;
           const repos = [];
 
           (async () => {
             for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: 'all' })) {
-             repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
-            }
+              repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
+          }
 
             console.log('Matching repositories:', repos);
             console.log('repos:', JSON.stringify(repos.map(repo => ({
               owner: repo.owner.login,
               name: repo.name,
-              path: 'sbx/version.json'
+              path: 'path/to/version.json'
             }))));
             process.exit(0);
           })();
-          " > find-repos.js
+          " > find-repos.mjs
 
           # Run the JavaScript code with Node.js
-          node find-repos.js
+          node --experimental-modules find-repos.mjs
+
 
       - name: Update JSON files in Matching Repos
         uses: actions/github-script@v6
