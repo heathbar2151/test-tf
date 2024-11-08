@@ -74,11 +74,11 @@ jobs:
       run: |
         cat /home/runner/work/_temp/repos.json
 
-    # Step 6: Update JSON files in Repos B and C
+    # Step 5: Update JSON files in Repos B and C
     - name: Update JSON files in Repos B and C
       uses: peter-evans/repository-dispatch@v2
       with:
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
-        repository: ${{ fromJson(file('/home/runner/work/_temp/repos.json')).0.owner }}/${{ fromJson(file('/home/runner/work/_temp/repos.json')).0.name }}
+        repository: ${{ env.REPOS }}  # Use the output variable from the previous step
         event-type: update-version
         client-payload: '{"version": "${{ env.VERSION_TAG }}"}'
