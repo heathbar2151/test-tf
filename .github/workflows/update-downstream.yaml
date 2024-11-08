@@ -33,28 +33,30 @@ jobs:
         env:
           REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         run: |
+          # Create a temporary file to hold the JavaScript code
+          echo "
           const { Octokit } = require('@octokit/rest');
-          const octokit = new Octokit({ auth: process.env.REPO_TOKEN });  # Authenticate with the PAT
-          const namingPattern = /^test\d+$/;
+          const octokit = new Octokit({ auth: process.env.REPO_TOKEN });
+          const namingPattern = /^test\\d+$/;
           const repos = [];
 
-          // Use pagination to get all repos of the authenticated user
-          for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
-            repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
-          }
+          (async () => {
+            for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: 'all' })) {
+             repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
+            }
 
-          console.log("Matching repositories:", repos);
-          // Store repos in a format that the next steps can use
-          console.log("repos:", JSON.stringify(repos.map(repo => ({
-            owner: repo.owner.login,
-            name: repo.name,
-            path: 'path/to/version.json'
-          }))));
-          return JSON.stringify(repos.map(repo => ({
-            owner: repo.owner.login,
-            name: repo.name,
-            path: 'sbx/alerts.json'
-          })));
+            console.log('Matching repositories:', repos);
+            console.log('repos:', JSON.stringify(repos.map(repo => ({
+              owner: repo.owner.login,
+              name: repo.name,
+              path: 'sbx/version.json'
+            }))));
+            process.exit(0);
+          })();
+          " > find-repos.js
+
+          # Run the JavaScript code with Node.js
+          node find-repos.js
 
       - name: Update JSON files in Matching Repos
         uses: actions/github-script@v6
