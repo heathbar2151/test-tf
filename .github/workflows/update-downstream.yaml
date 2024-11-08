@@ -21,7 +21,14 @@ jobs:
         VERSION_TAG=$(echo "${GITHUB_REF#refs/tags/}")
         echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
 
-    # Step 3: Find repos that follow the naming convention "test{number}"
+    # Step 3: Install dependencies
+    - name: Install dependencies
+      run: |
+        # Create a package.json to install dependencies (like @octokit/rest and node-fetch)
+        echo '{"name": "find-repos","version": "1.0.0","dependencies": {"@octokit/rest": "^18.0.0","node-fetch": "^2.6.1"}}' > package.json
+        npm install
+
+    # Step 4: Find repos that follow the naming convention "test{number}"
     - name: Find Repos with Naming Convention
       id: find_repos
       env:
@@ -48,19 +55,16 @@ jobs:
           console.log('repos:', JSON.stringify(repos.map(repo => ({
             owner: repo.owner.login,
             name: repo.name,
-            path: 'path/to/version.json'
+            path: 'sbx/alerts.json'
           }))));
           process.exit(0);
         })();
         " > find-repos.mjs
 
-        # Install the 'node-fetch' package to polyfill fetch
-        npm install node-fetch
-
         # Run the JavaScript code with Node.js
         node --experimental-modules find-repos.mjs
 
-    # Step 4: Update JSON files in Repos B and C
+    # Step 5: Update JSON files in Repos B and C
     - name: Update JSON files in Repos B and C
       uses: peter-evans/repository-dispatch@v2
       with:
