@@ -19,28 +19,42 @@ jobs:
           version="${GITHUB_REF#refs/tags/}"
           echo "version=$version" >> $GITHUB_ENV
 
+      - name: Set up Node.js (for @octokit/rest)
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install @octokit/rest
+        run: |
+          npm install @octokit/rest
+
       - name: Find Repos with Naming Convention
         id: find_repos
-        uses: actions/github-script@v6
         env:
-          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}  # Make sure the token is available here
-        with:
-          script: |
-            const octokit = new github.getOctokit(process.env.REPO_TOKEN);  // Create an authenticated Octokit instance
-            const namingPattern = /^test\d+$/;
-            const repos = [];
+          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+        run: |
+          const { Octokit } = require('@octokit/rest');
+          const octokit = new Octokit({ auth: process.env.REPO_TOKEN });  # Authenticate with the PAT
+          const namingPattern = /^test\d+$/;
+          const repos = [];
 
-            // Use pagination to get all repos of the authenticated user
-            for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
-              repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
-            }
+          // Use pagination to get all repos of the authenticated user
+          for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
+            repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
+          }
 
-            console.log("Matching repositories:", repos);
-            return JSON.stringify(repos.map(repo => ({
-              owner: repo.owner.login,
-              name: repo.name,
-              path: 'sbx/alerts.json'
-            })));
+          console.log("Matching repositories:", repos);
+          // Store repos in a format that the next steps can use
+          console.log("repos:", JSON.stringify(repos.map(repo => ({
+            owner: repo.owner.login,
+            name: repo.name,
+            path: 'path/to/version.json'
+          }))));
+          return JSON.stringify(repos.map(repo => ({
+            owner: repo.owner.login,
+            name: repo.name,
+            path: 'sbx/alerts.json'
+          })));
 
       - name: Update JSON files in Matching Repos
         uses: actions/github-script@v6
