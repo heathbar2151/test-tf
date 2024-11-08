@@ -31,13 +31,13 @@ jobs:
       - name: Find Repos with Naming Convention
         id: find_repos
         env:
-          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+         REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         run: |
           # Create a temporary .mjs file to hold the JavaScript code (using ESM syntax)
           echo "
           import { Octokit } from '@octokit/rest'; // Use 'import' for ESM
-          import fetch from 'node-fetch';
-          
+          import fetch from 'node-fetch'; // Import the 'fetch' polyfill for Node.js
+
           const octokit = new Octokit({ 
             auth: process.env.REPO_TOKEN, 
             request: { fetch }  // Pass 'fetch' to Octokit
@@ -48,7 +48,7 @@ jobs:
           (async () => {
             for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: 'all' })) {
               repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
-          }
+            }
 
             console.log('Matching repositories:', repos);
             console.log('repos:', JSON.stringify(repos.map(repo => ({
@@ -60,11 +60,11 @@ jobs:
           })();
           " > find-repos.mjs
 
-          # install node-fetch
+          # Install the 'node-fetch' package to polyfill fetch
           npm install node-fetch
+
           # Run the JavaScript code with Node.js
           node --experimental-modules find-repos.mjs
-
 
       - name: Update JSON files in Matching Repos
         uses: actions/github-script@v6
