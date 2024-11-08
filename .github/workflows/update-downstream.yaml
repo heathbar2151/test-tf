@@ -23,13 +23,15 @@ jobs:
         id: find_repos
         uses: actions/github-script@v6
         env:
-          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}  # Make sure the token is available here
         with:
           script: |
+            const octokit = new github.getOctokit(process.env.REPO_TOKEN);  // Create an authenticated Octokit instance
             const namingPattern = /^test\d+$/;
             const repos = [];
 
-            for await (const response of github.paginate.iterator(github.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
+            // Use pagination to get all repos of the authenticated user
+            for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
               repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
             }
 
