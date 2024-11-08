@@ -60,6 +60,8 @@ jobs:
 
           // Set the repos as an output variable
           console.log('repos:', JSON.stringify(repoNames));
+          // Save to a JSON file to be passed later
+          require('fs').writeFileSync('/home/runner/work/_temp/repos.json', JSON.stringify(repoNames));
           process.exit(0);
         })();
         " > find-repos.mjs
@@ -67,14 +69,16 @@ jobs:
         # Run the JavaScript code with Node.js
         node --experimental-modules find-repos.mjs
 
-        # Set repos as an output variable (replace with the actual repo names)
-        echo "repos=$(cat repos.json)" >> $GITHUB_ENV
+    # Step 5: Debug - Output the repos found
+    - name: Debug Repos Found
+      run: |
+        cat /home/runner/work/_temp/repos.json
 
-    # Step 5: Update JSON files in Repos B and C
+    # Step 6: Update JSON files in Repos B and C
     - name: Update JSON files in Repos B and C
       uses: peter-evans/repository-dispatch@v2
       with:
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
-        repository: ${{ env.REPOS }}  # Use the output variable from the previous step
+        repository: ${{ fromJson(file('/home/runner/work/_temp/repos.json')).0.owner }}/${{ fromJson(file('/home/runner/work/_temp/repos.json')).0.name }}
         event-type: update-version
         client-payload: '{"version": "${{ env.VERSION_TAG }}"}'
