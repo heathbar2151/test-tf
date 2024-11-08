@@ -36,7 +36,12 @@ jobs:
           # Create a temporary .mjs file to hold the JavaScript code (using ESM syntax)
           echo "
           import { Octokit } from '@octokit/rest'; // Use 'import' for ESM
-          const octokit = new Octokit({ auth: process.env.REPO_TOKEN });
+          import fetch from 'node-fetch';
+          
+          const octokit = new Octokit({ 
+            auth: process.env.REPO_TOKEN, 
+            request: { fetch }  // Pass 'fetch' to Octokit
+          });
           const namingPattern = /^test\\d+$/;
           const repos = [];
 
@@ -55,6 +60,8 @@ jobs:
           })();
           " > find-repos.mjs
 
+          # install node-fetch
+          npm install node-fetch
           # Run the JavaScript code with Node.js
           node --experimental-modules find-repos.mjs
 
