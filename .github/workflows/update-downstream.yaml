@@ -52,11 +52,14 @@ jobs:
           }
 
           console.log('Matching repositories:', repos);
-          console.log('repos:', JSON.stringify(repos.map(repo => ({
+          const repoNames = repos.map(repo => ({
             owner: repo.owner.login,
             name: repo.name,
             path: 'sbx/alerts.json'
-          }))));
+          }));
+
+          // Set the repos as an output variable
+          console.log('repos:', JSON.stringify(repoNames));
           process.exit(0);
         })();
         " > find-repos.mjs
@@ -64,6 +67,7 @@ jobs:
         # Run the JavaScript code with Node.js
         node --experimental-modules find-repos.mjs
 
+        # Set repos as an output variable (replace with the actual repo names)
         echo "repos=$(cat repos.json)" >> $GITHUB_ENV
 
     # Step 5: Update JSON files in Repos B and C
@@ -71,6 +75,6 @@ jobs:
       uses: peter-evans/repository-dispatch@v2
       with:
         token: ${{ secrets.REPO_ACCESS_TOKEN }}
-        repository: ${{ steps.find_repos.outputs.repos }}  # The repos from the previous step
+        repository: ${{ env.REPOS }}  # Use the output variable from the previous step
         event-type: update-version
         client-payload: '{"version": "${{ env.VERSION_TAG }}"}'
