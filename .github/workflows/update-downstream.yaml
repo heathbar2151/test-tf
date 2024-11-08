@@ -22,38 +22,33 @@ jobs:
       - name: Find Repos with Naming Convention
         id: find_repos
         uses: actions/github-script@v6
-        env:
-          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         with:
           script: |
             const namingPattern = /^test\d+$/;
-            const octokit = github.getOctokit(process.env.REPO_TOKEN);
-            
-            async function findRepos() {
-              const repos = [];
-              for await (const response of octokit.paginate.iterator(octokit.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
-                repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
-              }
-              return repos.map(repo => ({ owner: repo.owner.login, name: repo.name, path: 'sbx/alerts.json' }));
+            const repos = [];
+
+            for await (const response of github.paginate.iterator(github.rest.repos.listForAuthenticatedUser, { visibility: "all" })) {
+              repos.push(...response.data.filter(repo => namingPattern.test(repo.name)));
             }
 
-            const matchingRepos = await findRepos();
-            console.log("Matching repositories:", matchingRepos);
-            return matchingRepos;
+            console.log("Matching repositories:", repos);
+            return JSON.stringify(repos.map(repo => ({
+              owner: repo.owner.login,
+              name: repo.name,
+              path: 'sbx/alerts.json'
+            })));
 
       - name: Update JSON files in Matching Repos
-        if: steps.find_repos.outputs.success == 'true'
         uses: actions/github-script@v6
         env:
-          REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          VERSION: ${{ env.version }}
         with:
           script: |
-            const version = process.env.version;
-            const octokit = github.getOctokit(process.env.REPO_TOKEN);
-            const repos = ${{ steps.find_repos.outputs.result }};
+            const version = process.env.VERSION;
+            const repos = JSON.parse(${ { steps.find_repos.outputs.result } });
 
             async function updateFile(owner, repo, path) {
-              const { data: file } = await octokit.rest.repos.getContent({
+              const { data: file } = await github.rest.repos.getContent({
                 owner,
                 repo,
                 path
@@ -65,7 +60,7 @@ jobs:
               
               const updatedContent = Buffer.from(JSON.stringify(jsonContent, null, 2)).toString('base64');
 
-              await octokit.rest.repos.createOrUpdateFileContents({
+              await github.rest.repos.createOrUpdateFileContents({
                 owner,
                 repo,
                 path,
@@ -76,9 +71,5 @@ jobs:
               });
             }
 
-            Promise.all(repos.map(repo => updateFile(repo.owner, repo.name, repo.path)))
-              .then(() => console.log("Version updated in matching repos"))
-              .catch(error => {
-                console.error(error);
-                process.exit(1);
-              });
+            await Promise.all(repos.map(repo => updateFile(repo.owner, repo.name, repo.path)));
+            console.log("Version updated in matching repos");
