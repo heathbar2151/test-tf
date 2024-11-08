@@ -27,7 +27,7 @@ jobs:
         with:
           script: |
             const namingPattern = /^test\d+$/;
-            const octokit = new (require("@octokit/action").Octokit)();
+            const octokit = github.getOctokit(process.env.REPO_TOKEN);
             
             async function findRepos() {
               const repos = [];
@@ -39,18 +39,17 @@ jobs:
 
             const matchingRepos = await findRepos();
             console.log("Matching repositories:", matchingRepos);
-
             return matchingRepos;
 
       - name: Update JSON files in Matching Repos
+        if: steps.find_repos.outputs.success == 'true'
         uses: actions/github-script@v6
         env:
           REPO_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
         with:
           script: |
             const version = process.env.version;
-            const { Octokit } = require("@octokit/action");
-            const octokit = new Octokit();
+            const octokit = github.getOctokit(process.env.REPO_TOKEN);
             const repos = ${{ steps.find_repos.outputs.result }};
 
             async function updateFile(owner, repo, path) {
